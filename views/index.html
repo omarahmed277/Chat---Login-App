@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Node.js App</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
+    />
+    <link rel="stylesheet" href="/css/SignUp.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Welcome to My Node.js App</h1>
+      <p>Create an account to get started.</p>
+
+      <form id="registrationForm" method="post" action="/auth/signup">
+        <input
+          type="text"
+          name="name"
+          id="name"
+          placeholder="Enter your name"
+          required
+        />
+        <span class="error-message" id="nameError"></span>
+
+        <input
+          type="email"
+          name="email"
+          id="email"
+          placeholder="Enter your email"
+          required
+        />
+        <span class="error-message" id="emailError"></span>
+
+        <input
+          type="tel"
+          name="phone"
+          id="phone"
+          placeholder="Enter your Phone Number"
+        />
+        <span class="error-message" id="phoneError"></span>
+
+        <div class="input-container">
+          <input
+            type="password"
+            name="password"
+            id="password"
+            placeholder="Enter your password"
+            required
+          />
+          <i class="fa fa-eye toggle-password" data-target="password"></i>
+        </div>
+        <span class="error-message" id="passwordError"></span>
+
+        <div class="input-container">
+          <input
+            type="password"
+            name="confirm_password"
+            id="confirm_password"
+            placeholder="Confirm your password"
+            required
+          />
+          <i
+            class="fa fa-eye toggle-password"
+            data-target="confirm_password"
+          ></i>
+        </div>
+        <span class="error-message" id="confirm_passwordError"></span>
+
+        <input
+          type="number"
+          name="age"
+          id="age"
+          placeholder="Enter your age"
+          required
+        />
+        <span class="error-message" id="ageError"></span>
+
+        <button type="submit">Sign Up</button>
+      </form>
+
+      <div class="social-buttons">
+        <button type="button" onclick="window.location.href='/auth/google'">
+          <i class="fab fa-google"></i> Google
+        </button>
+        <button type="button" onclick="window.location.href='/auth/linkedin'">
+          <i class="fab fa-linkedin"></i> LinkedIn
+        </button>
+      </div>
+
+      <div class="login-link">
+        Already have an account? <a href="/login">Login</a>
+      </div>
+    </div>
+
+    <script>
+      document
+        .getElementById("registrationForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          document
+            .querySelectorAll(".error-message")
+            .forEach((el) => (el.textContent = ""));
+
+          const formData = new FormData(e.target);
+          const data = Object.fromEntries(formData);
+
+          try {
+            const response = await fetch("/auth/signup", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data),
+            });
+
+            const result = await response.json();
+
+            if (response.status === 400) {
+              if (result.errors) {
+                result.errors.forEach((error) => {
+                  const errorElement = document.getElementById(
+                    `${error.path}Error`
+                  );
+                  if (errorElement) errorElement.textContent = error.msg;
+                });
+              }
+            } else if (response.ok) {
+              alert("SignUp Successful!");
+              window.location.href = "/login";
+            } else {
+              alert("An error occurred. Please try again.");
+            }
+          } catch (err) {
+            console.error("Error submitting form:", err);
+            alert("An error occurred. Please try again.");
+          }
+        });
+
+      // Toggle password visibility
+      document.querySelectorAll(".toggle-password").forEach((icon) => {
+        icon.addEventListener("click", () => {
+          const target = icon.getAttribute("data-target");
+          const input = document.getElementById(target);
+          if (input.type === "password") {
+            input.type = "text";
+            icon.classList.replace("fa-eye", "fa-eye-slash");
+          } else {
+            input.type = "password";
+            icon.classList.replace("fa-eye-slash", "fa-eye");
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

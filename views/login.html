@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Node.js App</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
+    <link rel="stylesheet" href="/css/login.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Welcome to My Node.js App</h1>
+      <p>Sign In to get started.</p>
+
+      <form method="post" action="/auth/login" id="LoginForm">
+        <input type="email" name="email" placeholder="Enter your email" required />
+        <span class="error-message" id="emailError"></span>
+
+        <div class="input-container">
+          <input type="password" name="password" id="password" placeholder="Enter your password" required />
+          <i class="fa fa-eye toggle-password" data-target="password"></i>
+        </div>
+        <span class="error-message" id="passwordError"></span>
+
+        <button type="submit">Log In</button>
+      </form>
+
+      <div class="Forget-Password-link">
+        <a href="/login">Forget Password</a>
+      </div>
+
+      <div class="social-buttons">
+        <button type="button" onclick="window.location.href='/auth/google'">
+          <i class="fab fa-google"></i> Google
+        </button>
+        <button type="button" onclick="window.location.href='/auth/linkedin'">
+          <i class="fab fa-linkedin"></i> LinkedIn
+        </button>
+      </div>
+
+      <div class="login-link">
+        Don't Have an account? <a href="/">Sign Up</a>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById("LoginForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        const formData = new FormData(this);
+        const jsonData = {};
+        formData.forEach((value, key) => {
+          jsonData[key] = value;
+        });
+
+        try {
+          const response = await fetch("/auth/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(jsonData),
+          });
+
+          const data = await response.json();
+
+          // Clear previous error messages
+          document.querySelectorAll(".error-message").forEach((el) => (el.textContent = ""));
+
+          if (!response.ok) {
+            // Modified error handling for your specific format
+            if (data.errors && Array.isArray(data.errors)) {
+              data.errors.forEach((error) => {
+                const errorElement = document.getElementById(`${error.path}Error`);
+                if (errorElement) {
+                  errorElement.textContent = error.msg;
+                }
+              });
+            } else {
+              alert(data.message || "Login failed. Please try again.");
+            }
+            return;
+          }
+
+          // Success case
+          localStorage.setItem("token", data.token);
+          sessionStorage.setItem("username", data.name);
+          window.location.href = "/chat";
+
+        } catch (error) {
+          console.error("Error:", error);
+          alert("An error occurred. Please try again.");
+        }
+      });
+
+      // Password visibility toggle
+      document.querySelector(".toggle-password").addEventListener("click", function () {
+        const passwordInput = document.getElementById(this.dataset.target);
+        passwordInput.type = passwordInput.type === "password" ? "text" : "password";
+        this.classList.toggle("fa-eye");
+        this.classList.toggle("fa-eye-slash");
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,5 @@
+# Ignore .env file
+.env
+node_modules
+information.txt
+getrefreshtoken.js
