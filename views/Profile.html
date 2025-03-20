@@ -3,31 +3,133 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Account Created Successfully</title>
+    <title>Your Profile</title>
     <style>
-      /* Previous styles remain mostly the same, adding/enhancing these */
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #f0f2f5;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      .navbar {
+        background: #0084ff;
+        padding: 15px;
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .navbar a {
+        color: white;
+        text-decoration: none;
+        margin: 0 10px;
+      }
+      .navbar a:hover {
+        text-decoration: underline;
+      }
+      .container {
+        flex: 1;
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #0084ff;
+        text-align: center;
+      }
+      .profile {
+        margin-top: 20px;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background: #fafafa;
+      }
+      .profile h2 {
+        color: #333;
+        margin-bottom: 20px;
+      }
+      .profile-info {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .profile-info strong {
+        color: #555;
+      }
+      .profile-info span {
+        color: #333;
+      }
+      .profilePhoto {
+        text-align: center;
+      }
+      .profilePhoto img {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #0084ff;
+      }
+      .loading::after {
+        content: "Loading...";
+        color: #888;
+      }
+      .buttons {
+        text-align: center;
+        margin-top: 20px;
+      }
+      .buttons button {
+        padding: 10px 20px;
+        background: #0084ff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin: 0 10px;
+      }
+      .buttons button:hover {
+        background: #0066cc;
+      }
+      footer {
+        text-align: center;
+        padding: 10px;
+        background: #0084ff;
+        color: white;
+        position: relative;
+        bottom: 0;
+        width: 100%;
+      }
     </style>
   </head>
   <body>
-    <!-- Navbar (unchanged) -->
     <nav class="navbar">
-      <!-- Previous navbar content -->
+      <div>Chat App</div>
+      <div>
+        <a href="/">Home</a>
+        <a href="#" id="logout">Logout</a>
+      </div>
     </nav>
 
     <div class="container">
-      <h1>Account Created Successfully!</h1>
+      <h1>Your Profile</h1>
 
       <div class="profile">
-        <h2>Your Profile</h2>
+        <h2>Account Details</h2>
         <div class="profile-info">
           <strong>Full Name:</strong>
-          <span id="profile_name" class="loading">Loading...</span>
+          <span id="profile_name" class="loading"></span>
           <strong>Email:</strong>
-          <span id="profile_email" class="loading">Loading...</span>
-          <strong>Username:</strong>
-          <span id="profile_username" class="loading">Loading...</span>
+          <span id="profile_email" class="loading"></span>
+          <strong>Phone:</strong>
+          <span id="profile_phone" class="loading"></span>
           <strong>Member Since:</strong>
-          <span id="profile_created" class="loading">Loading...</span>
+          <span id="profile_created" class="loading"></span>
         </div>
         <div class="profilePhoto">
           <img
@@ -38,64 +140,41 @@
         </div>
       </div>
 
-      <!-- Rest of the content (booking form, appointment details, buttons) remains same -->
+      <div class="buttons">
+        <button onclick="window.location.href='/chat'">Go to Chat</button>
+        <button id="editProfile">Edit Profile</button>
+      </div>
     </div>
 
-    <!-- Footer (unchanged) -->
-    <!-- In your HTML file -->
+    <footer>
+      <p>© 2025 Chat App. All rights reserved.</p>
+    </footer>
+
     <script>
-      // Store token in localStorage after login/signup
-      async function handleLoginOrSignup(email, password) {
+      async function fetchUserProfile() {
         try {
-          const response = await fetch("http://localhost:4000/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
+          console.log("Fetching profile data...");
+          const response = await fetch("/auth/profile/data", {
+            method: "GET",
+            credentials: "include",
           });
 
-          const data = await response.json();
-          if (response.ok) {
-            localStorage.setItem("token", data.token);
-            window.location.href = "/profile"; // Redirect to profile page
-          } else {
-            alert(data.errors[0].msg);
-          }
-        } catch (error) {
-          console.error("Login error:", error);
-        }
-      }
-
-      async function fetchUserProfile() {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          window.location.href = "/login";
-          return;
-        }
-
-        try {
-          const response = await fetch(
-            "http://localhost:4000/api/auth/profile",
-            {
-              method: "GET",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-
+          console.log("Profile response status:", response.status);
           if (!response.ok) {
-            throw new Error("Failed to fetch profile");
+            const errorText = await response.text();
+            console.error("Profile fetch failed:", response.status, errorText);
+            throw new Error("Failed to fetch profile data");
           }
 
           const userData = await response.json();
+          console.log("Profile data received:", userData);
 
           document.getElementById("profile_name").textContent =
             userData.name || "Not provided";
           document.getElementById("profile_email").textContent =
             userData.email || "Not provided";
-          document.getElementById("profile_username").textContent =
-            userData.username || userData.email.split("@")[0];
+          document.getElementById("profile_phone").textContent =
+            userData.phone || "Not provided";
           document.getElementById("profile_created").textContent = new Date(
             userData.createdAt
           ).toLocaleDateString();
@@ -107,37 +186,62 @@
           });
         } catch (error) {
           console.error("Error fetching profile:", error);
-          window.location.href = "/login";
+          window.location.href = "/login.html";
         }
       }
 
       async function checkAuth() {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          window.location.href = "/login";
-          return;
-        }
-
         try {
-          const response = await fetch("http://localhost:4000/api/auth/check", {
-            headers: { Authorization: `Bearer ${token}` },
+          console.log("Checking authentication...");
+          const response = await fetch("/auth/check", {
+            method: "GET",
+            credentials: "include",
           });
 
+          console.log("Auth check response status:", response.status);
           if (!response.ok) {
-            localStorage.removeItem("token");
-            window.location.href = "/login";
-          } else {
+            console.error("Auth check failed with status:", response.status);
+            window.location.href = "/login.html";
+            return;
+          }
+
+          const data = await response.json();
+          console.log("Auth check response:", data);
+
+          if (data.authenticated) {
+            console.log("User authenticated, fetching profile...");
             fetchUserProfile();
+          } else {
+            console.error("User not authenticated");
+            window.location.href = "/login.html";
           }
         } catch (error) {
-          console.error("Auth check failed:", error);
-          window.location.href = "/login";
+          console.error("Auth check error:", error);
+          window.location.href = "/login.html";
         }
       }
 
       document.addEventListener("DOMContentLoaded", () => {
+        console.log("Page loaded, checking auth...");
         checkAuth();
-        // Your existing event listeners...
+
+        document.getElementById("logout").addEventListener("click", async (e) => {
+          e.preventDefault();
+          try {
+            console.log("Logging out...");
+            await fetch("/auth/logout", {
+              method: "GET",
+              credentials: "include",
+            });
+            window.location.href = "/login.html";
+          } catch (error) {
+            console.error("Logout error:", error);
+          }
+        });
+
+        document.getElementById("editProfile").addEventListener("click", () => {
+          alert("Edit profile functionality coming soon!");
+        });
       });
     </script>
   </body>

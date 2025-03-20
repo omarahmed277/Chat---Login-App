@@ -28,17 +28,41 @@ passport.use(
       callbackURL: process.env.LINKEDIN_CALLBACK_URL,
       scope: ["openid", "profile", "email"],
     },
-    (
-      issuer,
-      sub,
-      profile,
-      jwtClaims,
-      accessToken,
-      refreshToken,
-      params,
-      done
-    ) => {
-      return done(null, profile);
+    async (issuer, sub, profile, jwtClaims, accessToken, refreshToken, params, done) => {
+      try {
+        // Check if user exists by LinkedIn ID or email
+        let user = await User.findOne({
+          $or: [{ linkedinId: profile.id }, { email: profile.emails[0].value }],
+        });
+
+        if (!user) {
+          // Create a new user for LinkedIn login
+          user = new User({
+            name: profile.displayName || `${profile.name.givenName} ${profile.name.familyName}`,
+            email: profile.emails[0].value,
+            linkedinId: profile.id,
+            // Phone and password are not provided by LinkedIn, so left unset
+            connections: [],
+            pendingRequests: [],
+          });
+          await user.save();
+          console.log("🆕 New LinkedIn user saved to database:", user.email);
+        } else {
+          // Update existing user if LinkedIn ID is missing
+          if (!user.linkedinId) {
+            user.linkedinId = profile.id;
+            await user.save();
+            console.log("🔗 Linked LinkedIn ID to existing user:", user.email);
+          } else {
+            console.log("👤 Existing LinkedIn user logged in:", user.email);
+          }
+        }
+
+        return done(null, user);
+      } catch (err) {
+        console.error("❌ Error saving user to database:", err);
+        return done(err, null);
+      }
     }
   )
 );

@@ -60,15 +60,14 @@
               "Content-Type": "application/json",
             },
             body: JSON.stringify(jsonData),
+            credentials: "include", // Ensure session cookies are sent
           });
 
           const data = await response.json();
 
-          // Clear previous error messages
           document.querySelectorAll(".error-message").forEach((el) => (el.textContent = ""));
 
           if (!response.ok) {
-            // Modified error handling for your specific format
             if (data.errors && Array.isArray(data.errors)) {
               data.errors.forEach((error) => {
                 const errorElement = document.getElementById(`${error.path}Error`);
@@ -82,18 +81,16 @@
             return;
           }
 
-          // Success case
-          localStorage.setItem("token", data.token);
-          sessionStorage.setItem("username", data.name);
-          window.location.href = "/chat";
-
+          console.log("Login successful:", data);
+          if (data.success) {
+            window.location.href = "/profile"; // Redirect to profile
+          }
         } catch (error) {
-          console.error("Error:", error);
+          console.error("Error during login:", error);
           alert("An error occurred. Please try again.");
         }
       });
 
-      // Password visibility toggle
       document.querySelector(".toggle-password").addEventListener("click", function () {
         const passwordInput = document.getElementById(this.dataset.target);
         passwordInput.type = passwordInput.type === "password" ? "text" : "password";

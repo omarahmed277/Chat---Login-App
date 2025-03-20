@@ -6,16 +6,17 @@ const path = require("path");
 const bodyParser = require("body-parser");
 const passport = require("passport");
 const http = require("http");
+const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 
-// Import the User model
+// Import models
 const { User } = require("./models/User");
+const { Message } = require("./models/Message");
 
 const { notfound, errorHandler } = require("./middlewares/errors");
-const { connect } = require("http2");
 const ConnectToDB = require("./config/db");
 
-const port = process.env.PORT || 4000; // Updated to match your logs
+const port = process.env.PORT || 4000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
@@ -26,20 +27,31 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(cors());
 app.use(bodyParser.json());
 
-// connect DB
-ConnectToDB();
+app.get("/login.html", (req, res) => res.sendFile("login.html", { root: "views" }));
 
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "your_secret_key",
-    resave: false,
-    saveUninitialized: true,
-    cookie: { secure: false },
-  })
-);
-app.use(passport.initialize());
-app.use(passport.session());
+const MessageSchema = new mongoose.Schema({
+  sender: String, // Will use email now
+  receiver: String, // Will use email now
+  message: String,
+  timestamp: { type: Date, default: Date.now },
+});
 
+const MMessage = mongoose.model("Message", MessageSchema);
+
+// Connect to DB and start server
+(async () => {
+  try {
+    await ConnectToDB();
+    console.log("✅ Database connected successfully");
+
+    server.listen(port, () => {
+      console.log(`🚀 Server running on http://localhost:${port}`);
+    });
+  } catch (err) {
+    console.error("❌ Failed to connect to the database:", err);
+    process.exit(1);
+  }
+})();
 
 const users = {}; // Store online users by email
 
@@ -47,19 +59,13 @@ io.on("connection", (socket) => {
   console.log(`✅ User connected: ${socket.id}`);
 
   socket.on("register", async (email) => {
-    if (!email) {
-      console.error("❌ Received an empty email from client.");
-      return;
-    }
+    if (!email) return console.error("❌ Empty email received.");
     users[email] = socket.id;
     console.log(`✅ ${email} registered with socket ID: ${socket.id}`);
-
     try {
-      // Since the new User schema requires name, phone, email, and password,
-      // we'll need to provide dummy values for now or adjust the frontend to send them
       await User.findOneAndUpdate(
         { email },
-        { $set: { email, name: email.split("@")[0], phone: "01234567890", password: "defaultPass123!" } }, // Dummy values
+        { $set: { email, name: email.split("@")[0], phone: "01234567890", password: "defaultPass123!" } },
         { upsert: true, new: true }
       );
       broadcastUserList(email);
@@ -69,56 +75,109 @@ io.on("connection", (socket) => {
   });
 
   socket.on("sendConnectionRequest", async ({ from, to }) => {
-    await User.findOneAndUpdate(
-      { email: to },
-      { $addToSet: { pendingRequests: from } }
-    );
-    if (users[to]) {
-      io.to(users[to]).emit("connectionRequest", { from });
+    try {
+      await User.findOneAndUpdate(
+        { email: to },
+        { $addToSet: { pendingRequests: from } }
+      );
+      if (users[to]) {
+        io.to(users[to]).emit("connectionRequest", { from });
+      }
+      broadcastUserList(to); // Update recipient's UI
+      broadcastUserList(from); // Update sender's UI
+    } catch (err) {
+      console.error("❌ Error sending connection request:", err);
     }
   });
 
   socket.on("acceptConnection", async ({ from, to }) => {
-    await User.findOneAndUpdate(
-      { email: from },
-      { $addToSet: { connections: to } }
-    );
-    await User.findOneAndUpdate(
-      { email: to },
-      { $addToSet: { connections: from }, $pull: { pendingRequests: from } }
-    );
-    broadcastUserList(from);
-    broadcastUserList(to);
+    try {
+      await User.findOneAndUpdate(
+        { email: from },
+        { $addToSet: { connections: to } }
+      );
+      await User.findOneAndUpdate(
+        { email: to },
+        { $addToSet: { connections: from }, $pull: { pendingRequests: from } }
+      );
+      broadcastUserList(from);
+      broadcastUserList(to);
+    } catch (err) {
+      console.error("❌ Error accepting connection:", err);
+    }
   });
 
   socket.on("loadMessages", async ({ sender, receiver }) => {
-    const messages = await Message.find({
-      $or: [
-        { sender, receiver },
-        { sender: receiver, receiver: sender },
-      ],
-    }).sort({ timestamp: 1 });
-    socket.emit("previousMessages", messages);
+    console.log("Loading messages for:", { sender, receiver });
+    try {
+      if (!MMessage) {
+        throw new Error("Message model is not defined");
+      }
+      const messages = await MMessage.find({
+        $or: [
+          { sender, receiver },
+          { sender: receiver, receiver: sender },
+        ],
+      }).sort({ timestamp: 1 });
+      console.log("Found messages:", messages);
+      socket.emit("previousMessages", messages);
+    } catch (err) {
+      console.error("❌ Error loading messages:", err.message);
+      socket.emit("error", "Failed to load messages");
+    }
   });
 
   socket.on("sendMessage", async (data) => {
     const { sender, receiver, message } = data;
+    console.log("Sending message:", { sender, receiver, message });
+
+    // Check if sender and receiver are connected
     const senderUser = await User.findOne({ email: sender });
     if (!senderUser || !senderUser.connections.includes(receiver)) {
+      console.log(`❌ ${sender} not connected to ${receiver}`);
       socket.emit("error", "You must be connected to send messages.");
       return;
     }
-    const newMessage = new Message({ sender, receiver, message });
+
+    // Save the message to the database
+    const newMessage = new MMessage({ sender, receiver, message });
     await newMessage.save();
+    console.log("Message saved:", newMessage);
+
+    // Emit the message to the receiver if online
     if (users[receiver]) {
       io.to(users[receiver]).emit("receiveMessage", newMessage);
+      console.log(`Emitted to ${receiver}:`, users[receiver]);
     }
+
+    // Emit the message back to the sender
     socket.emit("receiveMessage", newMessage);
   });
 
   socket.on("deleteMessage", async ({ messageId }) => {
-    await Message.findByIdAndDelete(messageId);
+    console.log("Deleting message:", messageId);
+    await MMessage.findByIdAndDelete(messageId);
     io.emit("messageDeleted", { messageId });
+  });
+
+  socket.on("messageRead", async ({ messageId, sender }) => {
+    const message = await Message.findOne({ _id: messageId, receiver: socket.email });
+    if (message && message.status !== "read") {
+      message.status = "read";
+      await message.save();
+      io.to(sender).emit("messageStatus", { messageId, status: "read" });
+    }
+  });
+
+  socket.on("editMessage", async ({ messageId, newMessage, sender, receiver }) => {
+    const message = await Message.findOne({ _id: messageId, sender });
+    if (message) {
+      message.message = newMessage;
+      message.edited = true;
+      await message.save();
+      io.to(receiver).emit("messageEdited", { messageId, newMessage });
+      socket.emit("messageEdited", { messageId, newMessage });
+    }
   });
 
   socket.on("searchUsers", async ({ query, email }) => {
@@ -170,6 +229,7 @@ async function broadcastUserList(email) {
     email: conn,
     online: onlineUsers.includes(conn),
   }));
+  console.log("Broadcasting to:", email, "Pending:", user.pendingRequests);
   io.to(users[email]).emit("updateUsers", {
     connections: userStatus,
     pendingRequests: user.pendingRequests || [],
@@ -191,7 +251,3 @@ app.get("/profile", (req, res) =>
 app.use(require("./middlewares/logger"));
 app.use(notfound);
 app.use(errorHandler);
-
-server.listen(port, () => {
-  console.log(`🚀 Server running on http://localhost:${port}`);
-});

@@ -55,46 +55,54 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-router.post(
-  "/login",
-  asynchandler(async (req, res) => {
-    console.log("Incoming request:", req.body);
+// In your auth router
+router.get("/check", (req, res) => {
+  if (req.isAuthenticated()) {
+    console.log("✅ Auth check passed for:", req.user.email);
+    res.json({ authenticated: true, email: req.user.email });
+  } else {
+    console.log("⚠️ Auth check failed: User not authenticated");
+    res.status(401).json({ authenticated: false });
+  }
+});
 
-    const { error } = validateLoginUser(req.body);
-    const { email, password } = req.body;
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
 
-    if (error) {
-      console.log("Validation Errors:", error.details);
-      return res.status(400).json({
-        errors: error.details.map((err) => ({
-          path: err.path[0],
-          msg: err.message,
-        })),
-      });
-    }
-
+  try {
     const user = await User.findOne({ email });
     if (!user) {
-      console.log("User not found");
-      return res.status(400).json({
-        errors: [{ path: "email", msg: "Invalid Email" }],
-      });
+      console.log("⚠️ Login failed: User not found for email:", email);
+      return res.status(400).json({ errors: [{ path: "email", msg: "User not found" }] });
     }
 
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      console.log("Invalid password");
-      return res.status(400).json({
-        errors: [{ path: "password", msg: "Invalid Password" }],
-      });
+    if (!user.password) {
+      console.log("⚠️ Login failed: No password set for:", email);
+      return res.status(400).json({ errors: [{ path: "password", msg: "No password set. Use Google/LinkedIn or set a password." }] });
     }
 
-    const token = user.generateToken()
-    console.log("User Logged successfully");
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      console.log("⚠️ Login failed: Incorrect password for:", email);
+      return res.status(400).json({ errors: [{ path: "password", msg: "Incorrect password" }] });
+    }
 
-    const { password: pwd, ...data } = user._doc;
-    res.status(200).json({ ...data, token, message: "Login Successful" });
-  })
-);
+    req.login(user, (err) => {
+      if (err) {
+        console.error("❌ Error logging in user:", err);
+        return res.status(500).json({ message: "Internal server error" });
+      }
+      console.log("✅ Local login successful for:", email);
+      if (user.profileCompleted) {
+        return res.json({ success: true, redirect: "/profile" });
+      } else {
+        return res.json({ success: true, redirect: "/auth/complete-profile" });
+      }
+    });
+  } catch (err) {
+    console.error("❌ Login error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 module.exports = router;

@@ -15,7 +15,7 @@ const userSchema = new Schema(
     },
     phone: {
       type: String,
-      required: true,
+      required: false,
       minlength: 11,
       maxlength: 11,
     },
@@ -31,7 +31,7 @@ const userSchema = new Schema(
       type: String,
       minlength: 8,
       trim: true,
-      required: true,
+      required: false,
     },
     age: {
       type: Number,
@@ -40,18 +40,35 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    connections: [{ type: String }],
+    pendingRequests: [{ type: String }],
+    linkedinId: { // Added for LinkedIn users
+      type: String,
+      unique: true,
+      sparse: true, // Allows null values while maintaining uniqueness
+    },
+    googleId: { // Added for Google users
+      type: String,
+      unique: true,
+      sparse: true, // Allows null values while maintaining uniqueness
+    },
+    profileCompleted: {
+      type: Boolean,
+      default: false,
+    },
   },
+
   { timestamps: true }
 );
 
 // generate Token
 userSchema.methods.generateToken = function (params) {
- return jwt.sign(
+  return jwt.sign(
     { _id: this._id, name: this.name, isAdmin: this.isAdmin },
     process.env.JWT_SECRET_KEY,
     { expiresIn: "1h" }
   );
-}
+};
 
 const User = mongoose.model("User", userSchema);
 
@@ -106,14 +123,11 @@ function validateSignupUser(User) {
 function validateLoginUser(User) {
   const schema = joi.object({
     email: joi.string().email().required().messages({
-      "string.empty": `email cannot be an empty field`
+      "string.empty": `email cannot be an empty field`,
     }),
-    password: joi
-      .string()
-      .required()
-      .messages({
-        "string.empty": `password cannot be an empty field`,
-      }),
+    password: joi.string().required().messages({
+      "string.empty": `password cannot be an empty field`,
+    }),
   });
 
   return schema.validate(User, { abortEarly: false });
