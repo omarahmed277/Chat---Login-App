@@ -78,6 +78,12 @@
       .search-result:hover {
         background: #f0f4ff;
       }
+      .search-result span {
+        max-width: 180px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
       .search-result button {
         padding: 6px 12px;
         background: #1e90ff;
@@ -140,11 +146,16 @@
       }
       .user-info {
         flex: 1;
+        min-width: 0;
       }
       .username {
         font-weight: 600;
         font-size: 16px;
         color: #333;
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .status {
         font-size: 12px;
@@ -171,6 +182,12 @@
         margin-left: 15px;
         width: 40px;
         height: 40px;
+      }
+      .request .username {
+        max-width: 150px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .request-buttons {
         display: flex;
@@ -229,6 +246,10 @@
       .chat-header .username {
         font-size: 18px;
         font-weight: 600;
+        max-width: 70%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .chat-header .status {
         font-size: 12px;
@@ -509,7 +530,7 @@
       let selectedMessageId = null;
       let replyToMessageId = null;
       let typingTimeout;
-      let pendingRequestSent = new Set(); // Track sent requests
+      let pendingRequestSent = new Set();
 
       socket.on("connect", () => console.log("✅ Connected to server"));
       socket.on("connect_error", (err) =>
@@ -558,9 +579,16 @@
 
         pendingRequests.innerHTML = "";
         if (requests && requests.length > 0) {
-          requests.forEach((userEmail) => {
+          // Filter out any pending requests for users who are already connected
+          const connectedEmails = connections.map((conn) => conn.email);
+          const filteredRequests = requests.filter(
+            (userEmail) => !connectedEmails.includes(userEmail)
+          );
+
+          filteredRequests.forEach((userEmail) => {
             const li = document.createElement("li");
             li.classList.add("request");
+            li.setAttribute("data-email", userEmail); // Add data attribute for easier removal
             li.innerHTML = `
               <div style="display: flex; align-items: center;">
                 <img src="https://via.placeholder.com/40" alt="صورة المستخدم" />
@@ -676,11 +704,28 @@
       function acceptConnection(from) {
         socket.emit("acceptConnection", { from, to: email });
         showNotification("تم القبول", `تم قبول طلب الاتصال من ${from}`);
+        // Remove the pending request from the UI immediately
+        const requestElement = document.querySelector(
+          `.request[data-email="${from}"]`
+        );
+        if (requestElement) {
+          requestElement.remove();
+        }
+        // Request an update to refresh the user list
+        socket.emit("updateUsers", email);
       }
 
       function declineConnection(from) {
         socket.emit("declineConnection", { from, to: email });
         showNotification("تم الرفض", `تم رفض طلب الاتصال من ${from}`);
+        // Remove the pending request from the UI immediately
+        const requestElement = document.querySelector(
+          `.request[data-email="${from}"]`
+        );
+        if (requestElement) {
+          requestElement.remove();
+        }
+        socket.emit("updateUsers", email);
       }
 
       let searchTimeout;
@@ -737,6 +782,19 @@
       socket.on("connectionRequestSent", ({ from, to }) => {
         if (from === email) {
           pendingRequestSent.add(to);
+        } else if (to === email && pendingRequestSent.has(from)) {
+          // If the other user sends a request back, auto-accept
+          socket.emit("acceptConnection", { from, to: email });
+          pendingRequestSent.delete(from);
+          showNotification("تم الاتصال", `تم الاتصال بـ ${from} تلقائيًا`);
+          // Remove the pending request from the UI
+          const requestElement = document.querySelector(
+            `.request[data-email="${from}"]`
+          );
+          if (requestElement) {
+            requestElement.remove();
+          }
+          socket.emit("updateUsers", email);
         }
       });
 
