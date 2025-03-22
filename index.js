@@ -58,9 +58,6 @@ const MessageSchema = new mongoose.Schema({
 });
 const MMessage = mongoose.model("Message", MessageSchema);
 
-// Assuming User Schema exists in ./models/User.js
-// Example: const UserSchema = new mongoose.Schema({ email: String, connections: [String], pendingRequests: [String], ... });
-
 // Connect to DB and start server
 (async () => {
   try {
@@ -150,6 +147,46 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("declineConnection", async ({ from, to }) => {
+    try {
+      await User.findOneAndUpdate(
+        { email: to },
+        { $pull: { pendingRequests: from } }
+      );
+      if (users[from]) {
+        io.to(users[from]).emit("connectionDeclined", { from, to });
+      }
+      broadcastUserList(to);
+    } catch (err) {
+      console.error("❌ Error declining connection:", err);
+      socket.emit("error", "Failed to decline connection");
+    }
+  });
+
+  socket.on("removeFriend", async ({ from, to }) => {
+    try {
+      await User.findOneAndUpdate(
+        { email: from },
+        { $pull: { connections: to } }
+      );
+      await User.findOneAndUpdate(
+        { email: to },
+        { $pull: { connections: from } }
+      );
+      if (users[to]) {
+        io.to(users[to]).emit("friendRemoved", { from, to });
+      }
+      if (users[from]) {
+        io.to(users[from]).emit("friendRemoved", { from, to });
+      }
+      broadcastUserList(from);
+      broadcastUserList(to);
+    } catch (err) {
+      console.error("❌ Error removing friend:", err);
+      socket.emit("error", "Failed to remove friend");
+    }
+  });
+
   socket.on("loadMessages", async ({ sender, receiver }) => {
     console.log("Loading messages for:", { sender, receiver });
     try {
@@ -216,36 +253,48 @@ io.on("connection", (socket) => {
     console.log("Deleting message:", messageId);
     try {
       await MMessage.findByIdAndDelete(messageId);
-      io.to(users[receiver]).emit("messageDeleted", { messageId });
-      io.to(users[sender]).emit("messageDeleted", { messageId });
+      if (users[receiver]) {
+        io.to(users[receiver]).emit("messageDeleted", { messageId });
+      }
+      if (users[sender]) {
+        io.to(users[sender]).emit("messageDeleted", { messageId });
+      }
     } catch (err) {
       console.error("❌ Error deleting message:", err);
       socket.emit("error", "Failed to delete message");
     }
   });
 
-  // Fixed search users functionality
   socket.on("searchUsers", async ({ query, email }) => {
     try {
       console.log(`🔍 Searching users for query: '${query}' by ${email}`);
-      const user = await User.findOne({ email });
-      if (!user) {
+      const currentUser = await User.findOne({ email });
+      if (!currentUser) {
         console.log(`❌ User ${email} not found in DB`);
         socket.emit("error", "User not found");
         return;
       }
-      // Use RegExp for case-insensitive partial matching
+
+      // Search for users whose email partially matches the query (case-insensitive)
       const allUsers = await User.find({
         email: { $regex: new RegExp(query, "i"), $ne: email },
       }).select("email connections pendingRequests");
+
       console.log(`🔍 Found ${allUsers.length} users matching '${query}'`);
-      const connectedUsers = user.connections || [];
-      const pendingRequests = user.pendingRequests || [];
-      const searchResults = allUsers.map((u) => ({
-        email: u.email,
-        connected: connectedUsers.includes(u.email),
-        pending: pendingRequests.includes(u.email),
-      }));
+
+      const connectedUsers = currentUser.connections || [];
+      const pendingRequestsSent = currentUser.pendingRequests || [];
+
+      const searchResults = allUsers.map((user) => {
+        const isConnected = connectedUsers.includes(user.email);
+        const isPending = user.pendingRequests.includes(email); // Check if current user sent a request
+        return {
+          email: user.email,
+          connected: isConnected,
+          pending: isPending,
+        };
+      });
+
       console.log("🔍 Search results:", searchResults);
       socket.emit("searchResults", searchResults);
     } catch (err) {
