@@ -15,9 +15,9 @@ router.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: process.env.NODE_ENV === "production", // False in development
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
   })
 );
@@ -46,7 +46,7 @@ passport.use(
             googleId: profile.id,
             connections: [],
             pendingRequests: [],
-            profileCompleted: false, // Google users start incomplete
+            profileCompleted: false,
           });
           await user.save();
           console.log("🆕 New Google user saved:", user.email);
@@ -87,6 +87,7 @@ passport.use(
       scope: ["openid", "profile", "email"],
     },
     async (issuer, sub, profile, jwtClaims, accessToken, refreshToken, params, done) => {
+      console.log("🔍 LinkedIn Profile:", profile); // Debug profile
       try {
         let user = await User.findOne({
           $or: [{ linkedinId: profile.id }, { email: profile.emails[0].value }],
@@ -99,7 +100,7 @@ passport.use(
             linkedinId: profile.id,
             connections: [],
             pendingRequests: [],
-            profileCompleted: false, // LinkedIn users start incomplete
+            profileCompleted: false,
           });
           await user.save();
           console.log("🆕 New LinkedIn user saved:", user.email);
@@ -129,7 +130,7 @@ passport.use(
 
 // Serialize and Deserialize User
 passport.serializeUser((user, done) => {
-  console.log("🔒 Serializing user:", user.email);
+  console.log("🔒 Serializing user:", user.email, "ID:", user._id);
   done(null, user._id);
 });
 
@@ -155,16 +156,16 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Middleware to check profile completion (only for Google/LinkedIn)
+// Middleware to check profile completion
 const ensureProfileCompleted = (req, res, next) => {
+  console.log("🔍 Checking authentication - req.user:", req.user);
   if (!req.isAuthenticated()) {
     console.log("⚠️ Unauthenticated request to protected route");
     return res.redirect("/login.html");
   }
 
-  // Only enforce profile completion for Google or LinkedIn users
   if ((req.user.googleId || req.user.linkedinId) && !req.user.profileCompleted) {
-    console.log("🔍 Redirecting Google/LinkedIn user to complete profile:", req.user.email);
+    console.log("🔍 Redirecting to complete profile:", req.user.email);
     return res.redirect("/auth/complete-profile");
   }
 
@@ -200,7 +201,7 @@ router.post("/login", async (req, res) => {
         return res.status(500).json({ message: "Internal server error" });
       }
       console.log("✅ Local login successful for:", email);
-      return res.json({ success: true, redirect: "/profile" }); // Local users go straight to profile
+      return res.json({ success: true, redirect: "/profile" });
     });
   } catch (err) {
     console.error("❌ Login error:", err);
@@ -208,7 +209,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// Routes
+// Authentication Routes
 router.get(
   "/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
@@ -242,24 +243,24 @@ router.get(
   }
 );
 
+// Profile Completion Routes
 router.get("/complete-profile", (req, res) => {
   if (!req.isAuthenticated()) {
     console.log("⚠️ Unauthenticated access to complete-profile");
     return res.redirect("/login.html");
   }
 
-  // Only Google or LinkedIn users with incomplete profiles should see this
   if (!req.user.googleId && !req.user.linkedinId) {
     console.log("✅ Local user, skipping complete-profile:", req.user.email);
     return res.redirect("/profile");
   }
 
   if (req.user.profileCompleted) {
-    console.log("✅ Profile already completed, redirecting to profile:", req.user.email);
+    console.log("✅ Profile already completed, redirecting:", req.user.email);
     return res.redirect("/profile");
   }
 
-  console.log("📝 Serving complete-profile page for Google/LinkedIn user:", req.user.email);
+  console.log("📝 Serving complete-profile page for:", req.user.email);
   res.sendFile("complete-profile.html", { root: "views" });
 });
 
@@ -269,10 +270,9 @@ router.post("/complete-profile", async (req, res) => {
     return res.status(401).json({ message: "Not authenticated" });
   }
 
-  // Only allow Google/LinkedIn users to complete profile
   if (!req.user.googleId && !req.user.linkedinId) {
     console.log("⚠️ Local user attempted POST to complete-profile:", req.user.email);
-    return res.status(403).json({ message: "Profile completion not required for local users" });
+    return res.status(403).json({ message: "Profile completion not required" });
   }
 
   const { phone, password } = req.body;
@@ -309,6 +309,7 @@ router.post("/complete-profile", async (req, res) => {
   }
 });
 
+// Protected Routes
 router.get("/profile", ensureProfileCompleted, (req, res) => {
   console.log("✅ Serving profile page for:", req.user.email);
   res.sendFile("profile.html", { root: "views" });

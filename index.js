@@ -248,6 +248,8 @@ app.get("/profile", (req, res) =>
   res.sendFile(__dirname + "/views/Profile.html")
 );
 
+
+
 app.use(require("./middlewares/logger"));
 app.use(notfound);
 app.use(errorHandler);
