@@ -42,12 +42,14 @@ const userSchema = new Schema(
     },
     connections: [{ type: String }],
     pendingRequests: [{ type: String }],
-    linkedinId: { // Added for LinkedIn users
+    linkedinId: {
+      // Added for LinkedIn users
       type: String,
       unique: true,
       sparse: true, // Allows null values while maintaining uniqueness
     },
-    googleId: { // Added for Google users
+    googleId: {
+      // Added for Google users
       type: String,
       unique: true,
       sparse: true, // Allows null values while maintaining uniqueness
