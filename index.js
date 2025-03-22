@@ -9,10 +9,9 @@ const http = require("http");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 
-// Import models
+// Assuming these files exist in your project structure
 const { User } = require("./models/User");
 const { Message } = require("./models/Message");
-
 const { notfound, errorHandler } = require("./middlewares/errors");
 const ConnectToDB = require("./config/db");
 
@@ -21,29 +20,52 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use(cors());
 app.use(bodyParser.json());
 
-app.get("/login.html", (req, res) => res.sendFile("login.html", { root: "views" }));
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000,
+    },
+  })
+);
 
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Message Schema
 const MessageSchema = new mongoose.Schema({
-  sender: String, // Will use email now
-  receiver: String, // Will use email now
+  sender: String,
+  receiver: String,
   message: String,
   timestamp: { type: Date, default: Date.now },
+  status: { type: String, default: "sent" },
+  replyTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Message",
+    default: null,
+  },
 });
-
 const MMessage = mongoose.model("Message", MessageSchema);
+
+// Assuming User Schema exists in ./models/User.js
+// Example: const UserSchema = new mongoose.Schema({ email: String, connections: [String], pendingRequests: [String], ... });
 
 // Connect to DB and start server
 (async () => {
   try {
     await ConnectToDB();
     console.log("✅ Database connected successfully");
-
     server.listen(port, () => {
       console.log(`🚀 Server running on http://localhost:${port}`);
     });
@@ -53,40 +75,60 @@ const MMessage = mongoose.model("Message", MessageSchema);
   }
 })();
 
-const users = {}; // Store online users by email
+// Store online users
+const users = {};
 
 io.on("connection", (socket) => {
   console.log(`✅ User connected: ${socket.id}`);
 
   socket.on("register", async (email) => {
-    if (!email) return console.error("❌ Empty email received.");
+    if (!email) {
+      console.error("❌ Empty email received.");
+      socket.emit("error", "Email is required");
+      return;
+    }
     users[email] = socket.id;
     console.log(`✅ ${email} registered with socket ID: ${socket.id}`);
     try {
-      await User.findOneAndUpdate(
+      const user = await User.findOneAndUpdate(
         { email },
-        { $set: { email, name: email.split("@")[0], phone: "01234567890", password: "defaultPass123!" } },
+        {
+          $setOnInsert: {
+            name: email.split("@")[0],
+            phone: "",
+            password: "",
+            profileCompleted: false,
+            connections: [],
+            pendingRequests: [],
+          },
+        },
         { upsert: true, new: true }
       );
       broadcastUserList(email);
     } catch (err) {
       console.error(`❌ Error registering user ${email}:`, err);
+      socket.emit("error", "Failed to register user");
     }
   });
 
   socket.on("sendConnectionRequest", async ({ from, to }) => {
     try {
-      await User.findOneAndUpdate(
+      const receiver = await User.findOneAndUpdate(
         { email: to },
         { $addToSet: { pendingRequests: from } }
       );
+      if (!receiver) {
+        socket.emit("error", "Receiver not found");
+        return;
+      }
       if (users[to]) {
         io.to(users[to]).emit("connectionRequest", { from });
       }
-      broadcastUserList(to); // Update recipient's UI
-      broadcastUserList(from); // Update sender's UI
+      broadcastUserList(to);
+      broadcastUserList(from);
     } catch (err) {
       console.error("❌ Error sending connection request:", err);
+      socket.emit("error", "Failed to send connection request");
     }
   });
 
@@ -104,23 +146,32 @@ io.on("connection", (socket) => {
       broadcastUserList(to);
     } catch (err) {
       console.error("❌ Error accepting connection:", err);
+      socket.emit("error", "Failed to accept connection");
     }
   });
 
   socket.on("loadMessages", async ({ sender, receiver }) => {
     console.log("Loading messages for:", { sender, receiver });
     try {
-      if (!MMessage) {
-        throw new Error("Message model is not defined");
-      }
       const messages = await MMessage.find({
         $or: [
           { sender, receiver },
           { sender: receiver, receiver: sender },
         ],
-      }).sort({ timestamp: 1 });
-      console.log("Found messages:", messages);
-      socket.emit("previousMessages", messages);
+      })
+        .populate("replyTo", "message")
+        .sort({ timestamp: 1 });
+      const formattedMessages = messages.map((msg) => ({
+        _id: msg._id,
+        sender: msg.sender,
+        receiver: msg.receiver,
+        message: msg.message,
+        timestamp: msg.timestamp,
+        status: msg.status,
+        replyTo: msg.replyTo?._id || null,
+        replyMessage: msg.replyTo?.message || null,
+      }));
+      socket.emit("previousMessages", formattedMessages);
     } catch (err) {
       console.error("❌ Error loading messages:", err.message);
       socket.emit("error", "Failed to load messages");
@@ -128,74 +179,91 @@ io.on("connection", (socket) => {
   });
 
   socket.on("sendMessage", async (data) => {
-    const { sender, receiver, message } = data;
-    console.log("Sending message:", { sender, receiver, message });
-
-    // Check if sender and receiver are connected
-    const senderUser = await User.findOne({ email: sender });
-    if (!senderUser || !senderUser.connections.includes(receiver)) {
-      console.log(`❌ ${sender} not connected to ${receiver}`);
-      socket.emit("error", "You must be connected to send messages.");
-      return;
+    const { sender, receiver, message, replyTo } = data;
+    console.log("Sending message:", { sender, receiver, message, replyTo });
+    try {
+      const senderUser = await User.findOne({ email: sender });
+      if (!senderUser || !senderUser.connections.includes(receiver)) {
+        console.log(`❌ ${sender} not connected to ${receiver}`);
+        socket.emit("error", "You must be connected to send messages.");
+        return;
+      }
+      const newMessage = new MMessage({ sender, receiver, message, replyTo });
+      await newMessage.save();
+      const formattedMessage = {
+        _id: newMessage._id,
+        sender,
+        receiver,
+        message,
+        timestamp: newMessage.timestamp,
+        status: newMessage.status,
+        replyTo: newMessage.replyTo || null,
+        replyMessage: replyTo
+          ? (await MMessage.findById(replyTo))?.message
+          : null,
+      };
+      if (users[receiver]) {
+        io.to(users[receiver]).emit("receiveMessage", formattedMessage);
+      }
+      socket.emit("receiveMessage", formattedMessage);
+    } catch (err) {
+      console.error("❌ Error sending message:", err);
+      socket.emit("error", "Failed to send message");
     }
-
-    // Save the message to the database
-    const newMessage = new MMessage({ sender, receiver, message });
-    await newMessage.save();
-    console.log("Message saved:", newMessage);
-
-    // Emit the message to the receiver if online
-    if (users[receiver]) {
-      io.to(users[receiver]).emit("receiveMessage", newMessage);
-      console.log(`Emitted to ${receiver}:`, users[receiver]);
-    }
-
-    // Emit the message back to the sender
-    socket.emit("receiveMessage", newMessage);
   });
 
-  socket.on("deleteMessage", async ({ messageId }) => {
+  socket.on("deleteMessage", async ({ messageId, sender, receiver }) => {
     console.log("Deleting message:", messageId);
-    await MMessage.findByIdAndDelete(messageId);
-    io.emit("messageDeleted", { messageId });
-  });
-
-  socket.on("messageRead", async ({ messageId, sender }) => {
-    const message = await Message.findOne({ _id: messageId, receiver: socket.email });
-    if (message && message.status !== "read") {
-      message.status = "read";
-      await message.save();
-      io.to(sender).emit("messageStatus", { messageId, status: "read" });
+    try {
+      await MMessage.findByIdAndDelete(messageId);
+      io.to(users[receiver]).emit("messageDeleted", { messageId });
+      io.to(users[sender]).emit("messageDeleted", { messageId });
+    } catch (err) {
+      console.error("❌ Error deleting message:", err);
+      socket.emit("error", "Failed to delete message");
     }
   });
 
-  socket.on("editMessage", async ({ messageId, newMessage, sender, receiver }) => {
-    const message = await Message.findOne({ _id: messageId, sender });
-    if (message) {
-      message.message = newMessage;
-      message.edited = true;
-      await message.save();
-      io.to(receiver).emit("messageEdited", { messageId, newMessage });
-      socket.emit("messageEdited", { messageId, newMessage });
-    }
-  });
-
+  // Fixed search users functionality
   socket.on("searchUsers", async ({ query, email }) => {
-    const allUsers = await User.find({
-      email: { $regex: query, $options: "i" },
-    }).distinct("email");
-    const user = await User.findOne({ email });
-    if (!user) return;
-    const connectedUsers = user.connections || [];
-    const pendingRequests = user.pendingRequests || [];
-    const searchResults = allUsers
-      .filter((u) => u !== email)
-      .map((u) => ({
-        email: u,
-        connected: connectedUsers.includes(u),
-        pending: pendingRequests.includes(u),
+    try {
+      console.log(`🔍 Searching users for query: '${query}' by ${email}`);
+      const user = await User.findOne({ email });
+      if (!user) {
+        console.log(`❌ User ${email} not found in DB`);
+        socket.emit("error", "User not found");
+        return;
+      }
+      // Use RegExp for case-insensitive partial matching
+      const allUsers = await User.find({
+        email: { $regex: new RegExp(query, "i"), $ne: email },
+      }).select("email connections pendingRequests");
+      console.log(`🔍 Found ${allUsers.length} users matching '${query}'`);
+      const connectedUsers = user.connections || [];
+      const pendingRequests = user.pendingRequests || [];
+      const searchResults = allUsers.map((u) => ({
+        email: u.email,
+        connected: connectedUsers.includes(u.email),
+        pending: pendingRequests.includes(u.email),
       }));
-    socket.emit("searchResults", searchResults);
+      console.log("🔍 Search results:", searchResults);
+      socket.emit("searchResults", searchResults);
+    } catch (err) {
+      console.error("❌ Error searching users:", err);
+      socket.emit("error", "Failed to search users");
+    }
+  });
+
+  socket.on("typing", ({ sender, receiver }) => {
+    if (users[receiver]) {
+      io.to(users[receiver]).emit("typing", { sender });
+    }
+  });
+
+  socket.on("stopTyping", ({ sender, receiver }) => {
+    if (users[receiver]) {
+      io.to(users[receiver]).emit("stopTyping", { sender });
+    }
   });
 
   socket.on("disconnect", () => {
@@ -219,23 +287,28 @@ async function broadcastUserList(email) {
     console.log(`❌ No socket found for email: ${email}`);
     return;
   }
-  const user = await User.findOne({ email });
-  if (!user) {
-    console.log(`❌ User not found in database: ${email}`);
-    return;
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      console.log(`❌ User not found in database: ${email}`);
+      return;
+    }
+    const onlineUsers = Object.keys(users);
+    const userStatus = (user.connections || []).map((conn) => ({
+      email: conn,
+      online: onlineUsers.includes(conn),
+    }));
+    console.log("Broadcasting to:", email, "Pending:", user.pendingRequests);
+    io.to(users[email]).emit("updateUsers", {
+      connections: userStatus,
+      pendingRequests: user.pendingRequests || [],
+    });
+  } catch (err) {
+    console.error("❌ Error broadcasting user list:", err);
   }
-  const onlineUsers = Object.keys(users);
-  const userStatus = (user.connections || []).map((conn) => ({
-    email: conn,
-    online: onlineUsers.includes(conn),
-  }));
-  console.log("Broadcasting to:", email, "Pending:", user.pendingRequests);
-  io.to(users[email]).emit("updateUsers", {
-    connections: userStatus,
-    pendingRequests: user.pendingRequests || [],
-  });
 }
 
+// Routes (assuming these files exist)
 app.use("/auth", require("./routes/Google&LinkedInAuth"));
 app.use("/auth", require("./routes/auth"));
 app.use("/users", require("./routes/users"));
@@ -247,8 +320,6 @@ app.get("/login", (req, res) => res.sendFile(__dirname + "/views/login.html"));
 app.get("/profile", (req, res) =>
   res.sendFile(__dirname + "/views/Profile.html")
 );
-
-
 
 app.use(require("./middlewares/logger"));
 app.use(notfound);

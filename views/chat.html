@@ -7,47 +7,55 @@
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <style>
       body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background: #f0f2f5;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #eef2f7;
         margin: 0;
         padding: 0;
+        overflow: hidden;
       }
-
       .chat-app {
         display: flex;
         height: 100vh;
-        max-width: 1300px;
+        max-width: 1400px;
         margin: 0 auto;
-        box-shadow: 0 0 20px rgba(0,0,0,0.1);
-      }
-
-      .sidebar {
-        width: 300px;
         background: #fff;
-        border-right: 1px solid #e0e0e0;
-        overflow-y: auto;
+        border-radius: 15px;
+        box-shadow: 0 5px 25px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
       }
-
+      .sidebar {
+        width: 320px;
+        background: #fafafa;
+        border-right: 1px solid #e8ecef;
+        overflow-y: auto;
+        transition: transform 0.3s ease;
+      }
       .header {
-        padding: 15px;
-        background: #0084ff;
+        padding: 20px;
+        background: linear-gradient(135deg, #1e90ff, #00b7ff);
         color: white;
         text-align: center;
+        font-size: 1.5em;
+        font-weight: 600;
+        letter-spacing: 1px;
       }
-
       .search-box {
         padding: 15px;
         position: relative;
       }
-
       #search-input {
         width: 100%;
-        padding: 10px;
+        padding: 12px 15px;
         border: 1px solid #ddd;
-        border-radius: 20px;
+        border-radius: 25px;
         outline: none;
+        background: #fff;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+        transition: border-color 0.3s;
       }
-
+      #search-input:focus {
+        border-color: #1e90ff;
+      }
       .search-results {
         position: absolute;
         background: white;
@@ -55,250 +63,399 @@
         max-height: 200px;
         overflow-y: auto;
         border: 1px solid #ddd;
-        border-radius: 5px;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
         z-index: 10;
       }
-
       .search-result {
-        padding: 10px;
+        padding: 12px 15px;
         cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: background 0.2s;
       }
-
       .search-result:hover {
-        background: #f5f5f5;
+        background: #f0f4ff;
       }
-
+      .search-result button {
+        padding: 6px 12px;
+        background: #1e90ff;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: background 0.2s;
+      }
+      .search-result button:hover {
+        background: #0066cc;
+      }
+      .search-result button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
       h3 {
-        padding: 10px 15px;
-        color: #666;
+        padding: 12px 15px;
+        color: #555;
         font-size: 14px;
+        font-weight: 600;
         margin: 0;
+        text-transform: uppercase;
       }
-
-      .user-list, .pending-requests {
+      .user-list,
+      .pending-requests {
         list-style: none;
         padding: 0;
         margin: 0;
       }
-
-      .user, .request {
-        padding: 10px 15px;
+      .user {
+        padding: 15px;
         display: flex;
         align-items: center;
         cursor: pointer;
-        transition: background 0.2s;
+        transition: background 0.2s, transform 0.1s;
+        position: relative;
       }
-
-      .user:hover, .request:hover {
-        background: #f5f5f5;
+      .user:hover {
+        background: #e6f0ff;
+        transform: translateX(5px);
       }
-
-      .user img, .request img {
+      .user img {
         border-radius: 50%;
-        margin-left: 10px;
+        margin-left: 15px;
+        width: 40px;
+        height: 40px;
       }
-
+      .user.online::after {
+        content: "";
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        background: #34c759;
+        border-radius: 50%;
+        bottom: 15px;
+        left: 45px;
+        border: 2px solid #fff;
+      }
       .user-info {
         flex: 1;
       }
-
       .username {
-        font-weight: 500;
+        font-weight: 600;
+        font-size: 16px;
+        color: #333;
       }
-
       .status {
         font-size: 12px;
-        color: #999;
+        color: #888;
       }
-
       .status.online {
-        color: #4CAF50;
+        color: #34c759;
       }
-
+      .request {
+        padding: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #fff;
+        border-radius: 12px;
+        margin: 8px 15px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s;
+      }
+      .request:hover {
+        transform: scale(1.02);
+      }
+      .request img {
+        margin-left: 15px;
+        width: 40px;
+        height: 40px;
+      }
+      .request-buttons {
+        display: flex;
+        gap: 10px;
+      }
+      .request-buttons button {
+        padding: 8px 15px;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        transition: background 0.2s;
+      }
+      .request-buttons .accept {
+        background: #34c759;
+        color: white;
+      }
+      .request-buttons .accept:hover {
+        background: #28a745;
+      }
+      .request-buttons .decline {
+        background: #ff4d4d;
+        color: white;
+      }
+      .request-buttons .decline:hover {
+        background: #e63939;
+      }
       .chat-window {
         flex: 1;
         display: flex;
         flex-direction: column;
+        background: #f7f9fc;
       }
-
       .chat-header {
-        padding: 15px;
-        background: #fff;
-        border-bottom: 1px solid #e0e0e0;
+        padding: 20px;
+        background: linear-gradient(135deg, #1e90ff, #00b7ff);
+        color: white;
         display: flex;
         align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
       }
-
+      .chat-header .back-btn {
+        display: none;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 5px;
+      }
       .chat-header img {
         border-radius: 50%;
-        margin-left: 10px;
+        margin-left: 15px;
+        width: 45px;
+        height: 45px;
       }
-
+      .chat-header .username {
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .chat-header .status {
+        font-size: 12px;
+        opacity: 0.9;
+      }
       .chat-messages {
         flex: 1;
-        padding: 20px;
+        padding: 25px;
         overflow-y: auto;
-        background: #f0f2f5;
+        background: linear-gradient(to bottom, #f7f9fc, #eef2f7);
       }
-
       .message {
         display: flex;
         align-items: flex-end;
-        margin-bottom: 15px;
+        margin-bottom: 20px;
         position: relative;
+        animation: slideInMessage 0.3s ease;
       }
-
+      @keyframes slideInMessage {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
       .message.sent {
         justify-content: flex-end;
       }
-
       .message.received {
         justify-content: flex-start;
       }
-
       .message img {
         border-radius: 50%;
         margin-left: 10px;
+        width: 35px;
+        height: 35px;
       }
-
       .message-content {
-        max-width: 60%;
-        padding: 10px 15px;
-        border-radius: 15px;
+        max-width: 65%;
+        padding: 14px 20px;
+        border-radius: 20px;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+        transition: transform 0.2s ease, background 0.2s;
         position: relative;
       }
-
       .message.sent .message-content {
-        background: #0084ff;
+        background: linear-gradient(135deg, #1e90ff, #007bff);
         color: white;
       }
-
       .message.received .message-content {
-        background: #fff;
+        background: #ffffff;
         color: #333;
+        border: 1px solid #e8ecef;
       }
-
+      .message:hover .message-content {
+        transform: scale(1.03);
+      }
       .message.reply .message-content {
-        border-left: 3px solid #ddd;
-        padding-left: 10px;
+        border-right: 4px solid #1e90ff;
+        padding-right: 15px;
       }
-
       .message.reply::before {
         content: "رد على: ";
-        color: #666;
+        color: #777;
         font-size: 12px;
         position: absolute;
-        top: -15px;
+        top: -18px;
+        right: 10px;
       }
-
       .reply-preview {
         font-size: 12px;
-        color: #666;
-        margin-bottom: 5px;
-        opacity: 0.8;
-      }
-
-      .message.deleted .text {
-        color: #666;
+        color: #888;
+        margin-bottom: 8px;
+        opacity: 0.85;
         font-style: italic;
       }
-
+      .message.deleted .text {
+        color: #888;
+        font-style: italic;
+      }
       .time {
-        font-size: 10px;
+        font-size: 11px;
         opacity: 0.7;
-        margin-top: 5px;
+        margin-top: 6px;
         display: block;
       }
-
       .message-status {
         font-size: 10px;
         margin-right: 5px;
       }
-
       .chat-input {
-        padding: 15px;
+        padding: 20px;
         background: #fff;
         display: flex;
         align-items: center;
-        border-top: 1px solid #e0e0e0;
+        gap: 12px;
+        border-top: 1px solid #e8ecef;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
       }
-
       .chat-input input {
         flex: 1;
-        padding: 10px;
+        padding: 14px 20px;
         border: 1px solid #ddd;
-        border-radius: 20px;
+        border-radius: 30px;
         outline: none;
-        margin-left: 10px;
+        background: #f9f9f9;
+        transition: border-color 0.3s;
       }
-
+      .chat-input input:focus {
+        border-color: #1e90ff;
+      }
+      .chat-input .icon-btn {
+        background: none;
+        border: none;
+        font-size: 22px;
+        cursor: pointer;
+        padding: 5px;
+        color: #555;
+        transition: color 0.2s;
+      }
+      .chat-input .icon-btn:hover {
+        color: #1e90ff;
+      }
       .chat-input button {
-        padding: 10px 20px;
-        background: #0084ff;
+        padding: 14px;
+        background: linear-gradient(135deg, #1e90ff, #007bff);
         color: white;
         border: none;
-        border-radius: 20px;
+        border-radius: 50%;
+        width: 45px;
+        height: 45px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
-        transition: background 0.2s;
+        transition: transform 0.2s, background 0.2s;
       }
-
       .chat-input button:hover {
-        background: #0066cc;
+        transform: scale(1.1);
+        background: linear-gradient(135deg, #0066cc, #005cbf);
       }
-
       .action-menu {
         position: absolute;
         background: white;
         border: 1px solid #ddd;
-        border-radius: 5px;
-        padding: 5px;
+        border-radius: 8px;
+        padding: 8px;
         z-index: 100;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
       }
-
       .action-menu button {
         display: block;
         width: 100%;
-        padding: 5px 10px;
+        padding: 8px 12px;
         border: none;
         background: none;
         cursor: pointer;
         text-align: right;
+        font-size: 14px;
+        transition: background 0.2s;
       }
-
       .action-menu button:hover {
-        background: #f5f5f5;
+        background: #f0f4ff;
       }
-
       .notification {
         position: fixed;
         top: 20px;
         right: 20px;
-        background: #4CAF50;
+        background: linear-gradient(135deg, #34c759, #28a745);
         color: white;
-        padding: 15px;
-        border-radius: 5px;
+        padding: 15px 20px;
+        border-radius: 8px;
         display: none;
         z-index: 1000;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        max-width: 300px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        max-width: 320px;
+        animation: slideIn 0.5s ease;
       }
-
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
       .typing-indicator {
         font-size: 12px;
-        color: #666;
-        padding: 10px 20px;
+        color: #777;
+        padding: 10px 25px;
         display: none;
+        font-style: italic;
+      }
+      @media (max-width: 768px) {
+        .sidebar {
+          width: 100%;
+          position: absolute;
+          z-index: 100;
+          transform: translateX(-100%);
+        }
+        .sidebar.active {
+          transform: translateX(0);
+        }
+        .chat-app {
+          flex-direction: column;
+        }
+        .chat-header .back-btn {
+          display: block;
+        }
       }
     </style>
   </head>
   <body>
     <div class="chat-app">
       <div class="sidebar">
-        <div class="header">
-          <h2>الدردشة</h2>
-        </div>
+        <div class="header"><h2>الدردشة</h2></div>
         <div class="search-box">
-          <input type="text" id="search-input" placeholder="بحث عن مستخدم..." />
+          <input
+            type="text"
+            id="search-input"
+            placeholder="ابحث عن مستخدم..."
+          />
           <div id="search-results" class="search-results"></div>
         </div>
         <h3>طلبات الاتصال</h3>
@@ -308,17 +465,22 @@
       </div>
       <div class="chat-window">
         <div class="chat-header">
+          <span class="back-btn" onclick="toggleSidebar()">←</span>
           <div class="user-info">
-            <img src="https://via.placeholder.com/40" alt="صورة المستخدم" />
+            <img src="https://via.placeholder.com/45" alt="صورة المستخدم" />
             <span class="username"></span>
             <span class="status"></span>
           </div>
         </div>
         <div class="chat-messages"></div>
-        <div class="typing-indicator" id="typing-indicator">جاري الكتابة...</div>
+        <div class="typing-indicator" id="typing-indicator">
+          جاري الكتابة...
+        </div>
         <div class="chat-input">
+          <button class="icon-btn">😊</button>
           <input type="text" placeholder="اكتب رسالتك هنا..." />
-          <button onclick="sendMessage()">إرسال</button>
+          <button class="icon-btn">📎</button>
+          <button onclick="sendMessage()">➤</button>
         </div>
       </div>
     </div>
@@ -330,11 +492,7 @@
     <div id="notification" class="notification"></div>
 
     <script>
-      const LOCAL_IP = "10.5.50.9";
-      const socket = io(`http://${LOCAL_IP}:4000`, {
-        transports: ["websocket"],
-      });
-
+      const socket = io("http://localhost:4000", { transports: ["websocket"] });
       const chatMessages = document.querySelector(".chat-messages");
       const messageInput = document.querySelector(".chat-input input");
       const sendButton = document.querySelector(".chat-input button");
@@ -351,10 +509,16 @@
       let selectedMessageId = null;
       let replyToMessageId = null;
       let typingTimeout;
+      let pendingRequestSent = new Set(); // Track sent requests
 
       socket.on("connect", () => console.log("✅ Connected to server"));
-      socket.on("connect_error", (err) => console.error("❌ Connection error:", err.message));
-      socket.on("error", (msg) => alert(msg));
+      socket.on("connect_error", (err) =>
+        console.error("❌ Connection error:", err.message)
+      );
+      socket.on("error", (msg) => {
+        console.error("❌ Server error:", msg);
+        alert(msg);
+      });
 
       if (!email) {
         email = prompt("أدخل بريدك الإلكتروني:");
@@ -370,8 +534,7 @@
       }
 
       function validateEmail(email) {
-        const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return regex.test(email);
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       }
 
       socket.on("updateUsers", ({ connections, pendingRequests: requests }) => {
@@ -379,11 +542,14 @@
         connections.forEach(({ email: userEmail, online }) => {
           const li = document.createElement("li");
           li.classList.add("user");
+          if (online) li.classList.add("online");
           li.innerHTML = `
             <img src="https://via.placeholder.com/40" alt="صورة المستخدم" />
             <div class="user-info">
               <span class="username">${userEmail}</span>
-              <span class="status ${online ? "online" : "offline"}">${online ? "متصل" : "غير متصل"}</span>
+              <span class="status ${online ? "online" : "offline"}">${
+            online ? "متصل" : "غير متصل"
+          }</span>
             </div>
           `;
           li.addEventListener("click", () => selectChatPartner(userEmail));
@@ -396,11 +562,16 @@
             const li = document.createElement("li");
             li.classList.add("request");
             li.innerHTML = `
-              <img src="https://via.placeholder.com/40" alt="صورة المستخدم" />
-              <div class="user-info">
-                <span class="username">${userEmail}</span>
+              <div style="display: flex; align-items: center;">
+                <img src="https://via.placeholder.com/40" alt="صورة المستخدم" />
+                <div class="user-info">
+                  <span class="username">${userEmail}</span>
+                </div>
               </div>
-              <button onclick="acceptConnection('${userEmail}')">قبول</button>
+              <div class="request-buttons">
+                <button class="accept" onclick="acceptConnection('${userEmail}')">قبول</button>
+                <button class="decline" onclick="declineConnection('${userEmail}')">رفض</button>
+              </div>
             `;
             pendingRequests.appendChild(li);
           });
@@ -413,17 +584,30 @@
         const userStatus = Array.from(userList.querySelectorAll(".user")).find(
           (li) => li.querySelector(".username").textContent === selectedEmail
         );
-        const isOnline = userStatus ? userStatus.querySelector(".status").classList.contains("online") : false;
-        document.querySelector(".chat-header .username").textContent = chatPartner;
+        const isOnline = userStatus
+          ? userStatus.classList.contains("online")
+          : false;
+        document.querySelector(".chat-header .username").textContent =
+          chatPartner;
         statusElement.textContent = isOnline ? "متصل" : "غير متصل";
         statusElement.className = `status ${isOnline ? "online" : "offline"}`;
         chatMessages.innerHTML = "";
         socket.emit("loadMessages", { sender: email, receiver: chatPartner });
         typingIndicator.style.display = "none";
+        toggleSidebar();
+      }
+
+      function deselectChatPartner() {
+        chatPartner = "";
+        document.querySelector(".chat-header .username").textContent = "";
+        document.querySelector(".chat-header .status").textContent = "";
+        chatMessages.innerHTML = "";
       }
 
       socket.on("previousMessages", (messages) => {
-        messages.forEach((msg) => displayMessage(msg, msg.sender === email ? "sent" : "received"));
+        messages.forEach((msg) =>
+          displayMessage(msg, msg.sender === email ? "sent" : "received")
+        );
       });
 
       socket.on("receiveMessage", (data) => {
@@ -441,12 +625,30 @@
         if (data.replyTo) messageDiv.classList.add("reply");
         messageDiv.setAttribute("data-id", data._id);
         messageDiv.innerHTML = `
-          ${type === "received" ? '<img src="https://via.placeholder.com/30" alt="صورة المستخدم" />' : ""}
+          ${
+            type === "received"
+              ? '<img src="https://via.placeholder.com/35" alt="صورة المستخدم" />'
+              : ""
+          }
           <div class="message-content">
-            ${data.replyTo ? `<div class="reply-preview">${data.replyMessage || 'رسالة محذوفة'}</div>` : ''}
+            ${
+              data.replyTo
+                ? `<div class="reply-preview">${
+                    data.replyMessage || "رسالة محذوفة"
+                  }</div>`
+                : ""
+            }
             <span class="text">${data.message}</span>
-            <span class="time">${new Date(data.timestamp).toLocaleTimeString("ar")}
-              ${type === "sent" ? `<span class="message-status">${data.status || 'تم الإرسال'}</span>` : ""}
+            <span class="time">${new Date(data.timestamp).toLocaleTimeString(
+              "ar"
+            )}
+              ${
+                type === "sent"
+                  ? `<span class="message-status">${
+                      data.status || "تم الإرسال"
+                    }</span>`
+                  : ""
+              }
             </span>
           </div>
         `;
@@ -456,20 +658,14 @@
 
       function sendMessage() {
         const message = messageInput.value.trim();
-        if (!chatPartner) {
-          alert("يرجى اختيار مستخدم للدردشة معه!");
-          return;
-        }
-        if (!message) {
-          alert("يرجى كتابة رسالة!");
-          return;
-        }
-        const data = { 
-          sender: email, 
-          receiver: chatPartner, 
+        if (!chatPartner) return alert("يرجى اختيار مستخدم للدردشة معه!");
+        if (!message) return alert("يرجى كتابة رسالة!");
+        const data = {
+          sender: email,
+          receiver: chatPartner,
           message,
           replyTo: replyToMessageId,
-          status: "sent"
+          status: "sent",
         };
         socket.emit("sendMessage", data);
         messageInput.value = "";
@@ -479,6 +675,12 @@
 
       function acceptConnection(from) {
         socket.emit("acceptConnection", { from, to: email });
+        showNotification("تم القبول", `تم قبول طلب الاتصال من ${from}`);
+      }
+
+      function declineConnection(from) {
+        socket.emit("declineConnection", { from, to: email });
+        showNotification("تم الرفض", `تم رفض طلب الاتصال من ${from}`);
       }
 
       let searchTimeout;
@@ -496,83 +698,146 @@
 
       socket.on("searchResults", (results) => {
         searchResults.innerHTML = "";
-        results.forEach(({ email: userEmail, connected, pending }) => {
-          const div = document.createElement("div");
-          div.classList.add("search-result");
-          div.innerHTML = `
-            <span>${userEmail}</span>
-            ${connected ? "<span>متصل</span>" : pending ? "<span>معلق</span>" : `<button onclick="sendConnectionRequest('${userEmail}')">طلب اتصال</button>`}
-          `;
-          searchResults.appendChild(div);
-        });
+        if (!results || results.length === 0) {
+          searchResults.innerHTML =
+            "<div class='search-result'>لا توجد نتائج</div>";
+        } else {
+          results.forEach(({ email: userEmail, connected, pending }) => {
+            const div = document.createElement("div");
+            div.classList.add("search-result");
+            const isPending = pending || pendingRequestSent.has(userEmail);
+            div.innerHTML = `
+              <span>${userEmail}</span>
+              ${
+                connected
+                  ? "<span>متصل بالفعل</span>"
+                  : isPending
+                  ? "<span>معلق</span>"
+                  : `<button onclick="sendConnectionRequest('${userEmail}', this)">طلب اتصال</button>`
+              }
+            `;
+            searchResults.appendChild(div);
+          });
+        }
       });
 
-      function sendConnectionRequest(to) {
+      function sendConnectionRequest(to, button) {
+        if (pendingRequestSent.has(to)) return;
         socket.emit("sendConnectionRequest", { from: email, to });
-        searchResults.innerHTML = "";
+        pendingRequestSent.add(to);
+        button.disabled = true;
+        button.textContent = "تم الإرسال";
+        showNotification("طلب مرسل", `تم إرسال طلب الاتصال إلى ${to}`);
+        setTimeout(() => {
+          searchResults.innerHTML = "";
+          searchInput.value = "";
+        }, 2000);
       }
 
-      function deleteSelectedMessage() {
-        if (selectedMessageId) {
-          socket.emit("deleteMessage", { 
-            messageId: selectedMessageId,
-            sender: email,
-            receiver: chatPartner 
-          });
-          const messageElement = document.querySelector(`[data-id="${selectedMessageId}"]`);
-          if (messageElement) {
-            messageElement.querySelector(".text").textContent = "تم حذف هذه الرسالة";
-            messageElement.classList.add("deleted");
-          }
-          selectedMessageId = null;
-          actionMenu.style.display = "none";
-        } else {
-          alert("يرجى تحديد رسالة لحذفها!");
+      socket.on("connectionRequestSent", ({ from, to }) => {
+        if (from === email) {
+          pendingRequestSent.add(to);
         }
+      });
+
+      function deleteSelectedMessage() {
+        if (!selectedMessageId) return alert("يرجى تحديد رسالة لحذفها!");
+        socket.emit("deleteMessage", {
+          messageId: selectedMessageId,
+          sender: email,
+          receiver: chatPartner,
+        });
+        const messageElement = document.querySelector(
+          `[data-id="${selectedMessageId}"]`
+        );
+        if (messageElement) {
+          messageElement.querySelector(".text").textContent =
+            "تم حذف هذه الرسالة";
+          messageElement.classList.add("deleted");
+        }
+        selectedMessageId = null;
+        actionMenu.style.display = "none";
       }
 
       function replyToMessage() {
-        if (selectedMessageId) {
-          const msgElement = document.querySelector(`[data-id="${selectedMessageId}"] .text`);
-          replyToMessageId = selectedMessageId;
-          messageInput.placeholder = `رد على: ${msgElement.textContent.substring(0, 20)}...`;
-          messageInput.focus();
-          actionMenu.style.display = "none";
-        } else {
-          alert("يرجى تحديد رسالة للرد عليها!");
-        }
+        if (!selectedMessageId) return alert("يرجى تحديد رسالة للرد عليها!");
+        const msgElement = document.querySelector(
+          `[data-id="${selectedMessageId}"] .text`
+        );
+        replyToMessageId = selectedMessageId;
+        messageInput.placeholder = `رد على: ${msgElement.textContent.substring(
+          0,
+          20
+        )}...`;
+        messageInput.focus();
+        actionMenu.style.display = "none";
       }
 
       function copyMessage() {
-        if (selectedMessageId) {
-          const msgElement = document.querySelector(`[data-id="${selectedMessageId}"] .text`);
-          navigator.clipboard.writeText(msgElement.textContent);
-          alert("تم نسخ الرسالة!");
-        } else {
-          alert("يرجى تحديد رسالة لنسخها!");
-        }
+        if (!selectedMessageId) return alert("يرجى تحديد رسالة لنسخها!");
+        const msgElement = document.querySelector(
+          `[data-id="${selectedMessageId}"] .text`
+        );
+        navigator.clipboard.writeText(msgElement.textContent);
+        showNotification("تم النسخ", "تم نسخ الرسالة إلى الحافظة");
       }
 
       function showNotification(title, message) {
-        notification.innerHTML = `
-          <strong>${title}</strong>
-          <p>${message.substring(0, 50)}${message.length > 50 ? "..." : ""}</p>
-        `;
+        notification.innerHTML = `<strong>${title}</strong><p>${message.substring(
+          0,
+          50
+        )}${message.length > 50 ? "..." : ""}</p>`;
         notification.style.display = "block";
-        setTimeout(() => {
-          notification.style.display = "none";
-        }, 5000);
+        setTimeout(() => (notification.style.display = "none"), 3000);
       }
 
       socket.on("messageDeleted", ({ messageId }) => {
-        const messageElement = document.querySelector(`[data-id="${messageId}"]`);
+        const messageElement = document.querySelector(
+          `[data-id="${messageId}"]`
+        );
         if (messageElement) {
-          messageElement.querySelector(".text").textContent = "تم حذف هذه الرسالة";
+          messageElement.querySelector(".text").textContent =
+            "تم حذف هذه الرسالة";
           messageElement.classList.add("deleted");
         }
       });
 
-      // Typing indicator
+      socket.on("connectionDeclined", ({ from, to }) => {
+        if (to === email) {
+          showNotification(
+            "تم رفض الطلب",
+            `قام ${from} برفض طلب الاتصال الخاص بك`
+          );
+          socket.emit("updateUsers", email);
+        }
+      });
+
+      userList.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        const userLi = e.target.closest(".user");
+        if (userLi) {
+          const userEmail = userLi.querySelector(".username").textContent;
+          actionMenu.innerHTML = `
+            <button onclick="removeFriend('${userEmail}')">إزالة صديق</button>
+          `;
+          actionMenu.style.display = "block";
+          actionMenu.style.top = `${e.pageY}px`;
+          actionMenu.style.left = `${e.pageX}px`;
+        }
+      });
+
+      function removeFriend(userEmail) {
+        socket.emit("removeFriend", { from: email, to: userEmail });
+        actionMenu.style.display = "none";
+      }
+
+      socket.on("friendRemoved", ({ from, to }) => {
+        if (from === email || to === email) {
+          deselectChatPartner();
+          socket.emit("updateUsers", email);
+        }
+      });
+
       messageInput.addEventListener("input", () => {
         if (chatPartner) {
           socket.emit("typing", { sender: email, receiver: chatPartner });
@@ -584,24 +849,11 @@
       });
 
       socket.on("typing", ({ sender }) => {
-        if (sender === chatPartner) {
-          typingIndicator.style.display = "block";
-        }
+        if (sender === chatPartner) typingIndicator.style.display = "block";
       });
 
       socket.on("stopTyping", ({ sender }) => {
-        if (sender === chatPartner) {
-          typingIndicator.style.display = "none";
-        }
-      });
-
-      // Message status update
-      socket.on("messageStatus", ({ messageId, status }) => {
-        const messageElement = document.querySelector(`[data-id="${messageId}"]`);
-        if (messageElement) {
-          const statusElement = messageElement.querySelector(".message-status");
-          if (statusElement) statusElement.textContent = status;
-        }
+        if (sender === chatPartner) typingIndicator.style.display = "none";
       });
 
       sendButton.addEventListener("click", sendMessage);
@@ -614,6 +866,11 @@
         const messageDiv = e.target.closest(".message");
         if (messageDiv) {
           selectedMessageId = messageDiv.getAttribute("data-id");
+          actionMenu.innerHTML = `
+            <button onclick="deleteSelectedMessage()">حذف</button>
+            <button onclick="replyToMessage()">رد</button>
+            <button onclick="copyMessage()">نسخ</button>
+          `;
           actionMenu.style.display = "block";
           actionMenu.style.top = `${e.pageY}px`;
           actionMenu.style.left = `${e.pageX}px`;
@@ -623,6 +880,10 @@
       document.addEventListener("click", () => {
         actionMenu.style.display = "none";
       });
+
+      function toggleSidebar() {
+        document.querySelector(".sidebar").classList.toggle("active");
+      }
     </script>
   </body>
 </html>
